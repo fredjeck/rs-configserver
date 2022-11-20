@@ -11,7 +11,9 @@ use simple_error::bail;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Configuration {
-    pub repositories: Option<Vec<Repo>>,
+    pub name: String,
+    pub network: Net,
+    pub repositories: Vec<Repo>,
 }
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Repo {
@@ -20,6 +22,19 @@ pub struct Repo {
     pub user_name: String,
     pub password: String,
     pub refresh_interval: u64,
+    pub credentials: Option<Vec<Credential>>
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct Net{
+    pub host: String,
+    pub port: u16
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct Credential{
+    pub user_name: String,
+    pub password: String
 }
 
 pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {

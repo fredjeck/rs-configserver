@@ -1,11 +1,21 @@
+name: "Test Config Server"
+network:
+  host: 127.0.0.1
+  port: 8080
 repositories:
   - name: fswatcher
     url: https://github.com/fredjeck/fswatcher.git
     user_name: user
     password: pwd
     refresh_interval: 12
+    credentials:
+      - user_name: admin
+        password: admin
   - name: repo2
     url: http://test
     user_name: user
     password: pwd
     refresh_interval: 12
+    credentials:
+      - user_name: admin
+        password: admin
