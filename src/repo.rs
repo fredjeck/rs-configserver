@@ -5,12 +5,15 @@ use tracing::{error, debug};
 
 use std::{
     thread::{self, JoinHandle},
-    time::Duration,
+    time::Duration, path::Path,
 };
 
 pub fn watch(conf: Repo) -> JoinHandle<()> {
     return thread::spawn(move || {
         let tempdir = tempdir().unwrap();
+
+        let p = Path::new("").join(conf.name);
+
         debug!(
             repository = &conf.url,
             "Clonig '{}'", &conf.url

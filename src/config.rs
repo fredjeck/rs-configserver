@@ -22,19 +22,19 @@ pub struct Repo {
     pub user_name: String,
     pub password: String,
     pub refresh_interval: u64,
-    pub credentials: Option<Vec<Credential>>
+    pub credentials: Option<Vec<Credential>>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct Net{
+pub struct Net {
     pub host: String,
-    pub port: u16
+    pub port: u16,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct Credential{
+pub struct Credential {
     pub user_name: String,
-    pub password: String
+    pub password: String,
 }
 
 pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {
@@ -42,27 +42,33 @@ pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {
     let f = BufReader::new(f);
 
     let values: Configuration = serde_yaml::from_reader(f)?;
-    println!("{:?}", values);
     Ok(values)
 }
 
-/// Tries to locate the configserver.yml file either in the local directory or in a folder pointed by the CONFIGSERVER_HOME environment variable
+/// Tries to locate the configserver.yml file's path either :
+/// * in the current directory
+/// * in folder pointed by the CONFIGSERVER_HOME environment variable
+/// * directly by the CONFIGSERVER_CFG environment variable
 pub fn path() -> Result<PathBuf, Box<dyn Error>> {
-    let path = env::current_dir()?;
-    let mut config = path.join("configserver.yml");
+    let err = "Configuration not found, search order is, CONFIGSEVER_CFG, CONFIGSEVER_HOME/configserver.yml, cwd";
+
+    let config = match env::var("CONFIGSEVER_CFG") {
+        Ok(val) => {
+            let mut pb = PathBuf::new();
+            pb.push(val);
+            pb
+        }
+        _ => match env::var("CONFIGSEVER_HOME") {
+            Ok(val) => Path::new(val.as_str()).join("configserver.yml"),
+            _ => {
+                let path = env::current_dir()?;
+                path.join("configserver.yml")
+            },
+        },
+    };
 
     if config.exists() {
         return Ok(config);
     }
-
-    config = match env::var("CONFIGSEVER_HOME") {
-        Ok(val) => Path::new(val.as_str()).join("configserver.yml"),
-        Err(_) => bail!("configserver.yml was neither found in the current directory neither in the folder pointed by the CONFIGSERVER_HOME environment variable") 
-    };
-
-    if config.exists() {
-        Ok(config)
-    } else {
-        bail!("'{}': file not found", config.to_str().unwrap())
-    }
+    bail!(err)
 }
