@@ -3,7 +3,7 @@ use std::future::{ready, Ready};
 use actix_web::{
     body::EitherBody,
     dev::{self, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{header},
+    http::header,
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
@@ -68,21 +68,19 @@ where
         if !is_logged_in && request.path() != "/login" {
             let (request, _pl) = request.into_parts();
 
-            if !request.headers().contains_key(header::AUTHORIZATION) {
-                let response = HttpResponse::Unauthorized()
-                    .append_header((
-                        header::WWW_AUTHENTICATE,
-                        "Basic realm=\"ConfigServer\", charset=\"UTF-8\"",
+            if let Some(response) = ensure_authentication_basic(&request) {
+                return Box::pin(async {
+                    Ok(ServiceResponse::new(
+                        request,
+                        response.map_into_right_body(),
                     ))
-                    .finish()
-                    .map_into_right_body();
-                return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
-            } else {
-                let _ = is_authorized(&request);
-                let _ = match_request(&request);
-                let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
-                return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
+                });
             }
+
+            let _ = is_authorized(&request);
+            let _ = match_request(&request);
+            let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
+            return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
 
             // let response = HttpResponse::Found()
             //     .insert_header((http::header::LOCATION, "/login"))
@@ -104,27 +102,37 @@ where
 
 // }
 
-fn match_repository(repositories: Vec<Repo>){
-
+/// Ensures the request bears BASIC-AUTH credentials. If not crafts a response requiring the user to log-in
+fn ensure_authentication_basic(request: &HttpRequest) -> Option<HttpResponse> {
+    if !request.headers().contains_key(header::AUTHORIZATION) {
+        let response = HttpResponse::Unauthorized()
+            .append_header((
+                header::WWW_AUTHENTICATE,
+                "Basic realm=\"ConfigServer\", charset=\"UTF-8\"",
+            ))
+            .finish();
+        return Some(response);
+    }
+    None
 }
 
-fn match_request(request: &HttpRequest)->(&str, &str){
-    let p= request.path();
+fn match_repository(repositories: Vec<Repo>) {}
+
+fn match_request(request: &HttpRequest) -> (&str, &str) {
+    let p = request.path();
     let q = request.query_string();
-    debug!("{:?}   {:?}", p,q);
+    debug!("{:?}   {:?}", p, q);
     let uri = request.uri();
     let path = uri.path();
     let x = uri.path_and_query().unwrap();
     debug!("{:?}", x);
-    ("","")
+    ("", "")
 }
-
-
 
 fn is_authorized(request: &HttpRequest) -> bool {
     let auth = request.headers().get(header::AUTHORIZATION).unwrap();
     debug!("{:?}", auth);
-    let authstr=auth.to_str().unwrap();
+    let authstr = auth.to_str().unwrap();
     let b64 = authstr.strip_prefix("Basic ").unwrap();
     let bytes = base64::decode(b64).unwrap();
     let creds = String::from_utf8(bytes).unwrap();
