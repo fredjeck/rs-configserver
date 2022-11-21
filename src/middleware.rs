@@ -3,7 +3,7 @@ use std::future::{ready, Ready};
 use actix_web::{
     body::EitherBody,
     dev::{self, Service, ServiceRequest, ServiceResponse, Transform},
-    http::{self, header},
+    http::{header},
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;

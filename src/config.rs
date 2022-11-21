@@ -37,6 +37,14 @@ pub struct Credential {
     pub password: String,
 }
 
+/// Environment variable pointing to the configserver yaml configuration file
+static CONFIGSERVER_CFG: &str = "CONFIGSEVER_CFG";
+/// Environment variable pointing to the directory where the configserver yaml configuration is to be found
+static CONFIGSERVER_HOME: &str = "CONFIGSEVER_HOME";
+/// Default name of the configserver configuation file
+static CONFIGSERVER_YML: &str = "configserver.yml";
+
+/// Loads the configserver yaml configuration file from the provided path
 pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {
     let f = File::open(path)?;
     let f = BufReader::new(f);
@@ -45,25 +53,25 @@ pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {
     Ok(values)
 }
 
-/// Tries to locate the configserver.yml file's path either :
+/// Tries to locate the configserver.yml file's path either located:
 /// * in the current directory
-/// * in folder pointed by the CONFIGSERVER_HOME environment variable
+/// * in a folder pointed by the CONFIGSERVER_HOME environment variable
 /// * directly by the CONFIGSERVER_CFG environment variable
-pub fn path() -> Result<PathBuf, Box<dyn Error>> {
-    let err = "Configuration not found, search order is, CONFIGSEVER_CFG, CONFIGSEVER_HOME/configserver.yml, cwd";
+pub fn resolve_path() -> Result<PathBuf, Box<dyn Error>> {
+    let err = "Configuration not found, search order is: $CONFIGSEVER_CFG, $CONFIGSEVER_HOME/configserver.yml, cwd";
 
-    let config = match env::var("CONFIGSEVER_CFG") {
+    let config = match env::var(CONFIGSERVER_CFG) {
         Ok(val) => {
             let mut pb = PathBuf::new();
             pb.push(val);
             pb
         }
-        _ => match env::var("CONFIGSEVER_HOME") {
-            Ok(val) => Path::new(val.as_str()).join("configserver.yml"),
+        _ => match env::var(CONFIGSERVER_HOME) {
+            Ok(val) => Path::new(val.as_str()).join(CONFIGSERVER_YML),
             _ => {
                 let path = env::current_dir()?;
-                path.join("configserver.yml")
-            },
+                path.join(CONFIGSERVER_YML)
+            }
         },
     };
 

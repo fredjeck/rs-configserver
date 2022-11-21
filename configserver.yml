@@ -7,7 +7,7 @@ repositories:
     url: https://github.com/fredjeck/fswatcher.git
     user_name: user
     password: pwd
-    refresh_interval: 12
+    refresh_interval: 120000
     credentials:
       - user_name: admin
         password: admin
@@ -15,7 +15,7 @@ repositories:
     url: http://test
     user_name: user
     password: pwd
-    refresh_interval: 12
+    refresh_interval: 120000
     credentials:
       - user_name: admin
         password: admin
