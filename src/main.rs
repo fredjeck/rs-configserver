@@ -1,8 +1,6 @@
 use std::thread;
 
-use actix_web::{
-    App, HttpServer,
-};
+use actix_web::{App, HttpServer};
 use tempfile::tempdir;
 use tracing::{info, Level};
 

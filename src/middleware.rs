@@ -77,7 +77,35 @@ where
                 });
             }
 
-            let _ = is_authorized(&request);
+            let path_elements: Vec<&str> = request.path().split('/').collect();
+            let repo_name = path_elements[1];
+            let repo_config = match self
+                .configuration
+                .repositories
+                .iter()
+                .find(|&x| x.name.eq_ignore_ascii_case(repo_name))
+            {
+                Some(c) => c,
+                None => {
+                    let response = HttpResponse::NotFound().finish();
+                    return Box::pin(async {
+                        Ok(ServiceResponse::new(
+                            request,
+                            response.map_into_right_body(),
+                        ))
+                    });
+                }
+            };
+
+            if !is_authorized(&request, &repo_config){
+                let response = HttpResponse::Unauthorized().finish();
+                    return Box::pin(async {
+                        Ok(ServiceResponse::new(
+                            request,
+                            response.map_into_right_body(),
+                        ))
+                    });
+            }
             let _ = match_request(&request);
             let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
             return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
@@ -116,26 +144,35 @@ fn ensure_authentication_basic(request: &HttpRequest) -> Option<HttpResponse> {
     None
 }
 
-fn match_repository(repositories: Vec<Repo>) {}
-
 fn match_request(request: &HttpRequest) -> (&str, &str) {
     let p = request.path();
     let q = request.query_string();
     debug!("{:?}   {:?}", p, q);
     let uri = request.uri();
-    let path = uri.path();
     let x = uri.path_and_query().unwrap();
     debug!("{:?}", x);
     ("", "")
 }
 
-fn is_authorized(request: &HttpRequest) -> bool {
+fn is_authorized(request: &HttpRequest, config: &Repo) -> bool {
     let auth = request.headers().get(header::AUTHORIZATION).unwrap();
     debug!("{:?}", auth);
     let authstr = auth.to_str().unwrap();
     let b64 = authstr.strip_prefix("Basic ").unwrap();
     let bytes = base64::decode(b64).unwrap();
-    let creds = String::from_utf8(bytes).unwrap();
-    let splitted = creds.split(":");
-    false
+    let credsstr = String::from_utf8(bytes).unwrap();
+    let creds:Vec<&str> = credsstr.split(":").collect();
+
+    let users = match &config.credentials{
+        Some(c) => c,
+        None => return true,
+    };
+
+    let current = match users.iter().find(|&x| x.user_name.eq_ignore_ascii_case(creds[0])){
+        Some(c) => c,
+        None => return false,
+    };
+
+
+    current.password == creds[1]
 }

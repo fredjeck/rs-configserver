@@ -12,7 +12,7 @@ use std::{
 pub fn watch(conf: Repo, location: PathBuf) -> JoinHandle<()> {
     return thread::spawn(move || {
         let loc = location.join(&conf.name);
-        info!("Clonig '{}' to {}", &conf.url, loc.to_str().unwrap());
+        info!("Cloning '{}' to {}", &conf.url, loc.to_str().unwrap());
         let repo = match Repository::clone(&conf.url, loc) {
             Ok(repo) => repo,
             Err(e) => {
