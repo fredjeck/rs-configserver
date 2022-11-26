@@ -44,6 +44,15 @@ static CONFIGSERVER_HOME: &str = "CONFIGSEVER_HOME";
 /// Default name of the configserver configuation file
 static CONFIGSERVER_YML: &str = "configserver.yml";
 
+impl Configuration{
+
+    pub fn repository(&self, name:&str)->Option<&Repo>{
+        self.repositories
+        .iter()
+        .find(|&x| x.name.eq_ignore_ascii_case(name))
+    }
+}
+
 /// Loads the configserver yaml configuration file from the provided path
 pub fn load(path: &PathBuf) -> Result<Configuration, Box<dyn Error>> {
     let f = File::open(path)?;

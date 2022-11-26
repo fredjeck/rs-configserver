@@ -118,7 +118,7 @@ where
             AuthenticationState::Authorized { login, password } => (login, password),
         };
 
-        let (repo, path, branch) = match parse_query(request.path()) {
+        let (repo, path, branch) = match parse_query(request.path(), request.query_string()) {
             Query::Invalid => return self.not_found(request),
             Query::Success {
                 repository,
@@ -127,11 +127,7 @@ where
             } => (repository, path, branch),
         };
 
-        let repo_config = match self
-            .configuration
-            .repositories
-            .iter()
-            .find(|&x| x.name.eq_ignore_ascii_case(&repo))
+        let repo_config = match self.configuration.repository(&repo)
         {
             Some(c) => c,
             None => return self.not_found(request),
@@ -189,7 +185,7 @@ fn is_authorized(login: &str, password: &str, config: &Repo) -> bool {
     grant.password == password
 }
 
-fn parse_query(request_path: &str) -> Query {
+fn parse_query(request_path: &str, query_string: &str) -> Query {
     let path_elements: Vec<&str> = request_path.split('/').collect();
     if path_elements.len() < 2 {
         return Query::Invalid;
