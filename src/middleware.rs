@@ -7,9 +7,22 @@ use actix_web::{
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
-use tracing::debug;
 
 use crate::config::{Configuration, Repo};
+
+enum AuthenticationState {
+    Unauthorized,
+    Authorized { login: String, password: String },
+}
+
+enum Query {
+    Invalid,
+    Success {
+        repository: String,
+        path: String,
+        branch: String,
+    },
+}
 
 pub struct ConfigServer {
     configuration: Configuration,
@@ -47,6 +60,44 @@ pub struct ConfigServerMiddleware<S> {
     configuration: Configuration,
 }
 
+impl<S, B> ConfigServerMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S::Future: 'static,
+    B: 'static,
+{
+    fn not_found(
+        &self,
+        request: HttpRequest,
+    ) -> LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>> {
+        let response = HttpResponse::NotFound().finish();
+        return Box::pin(async {
+            Ok(ServiceResponse::new(
+                request,
+                response.map_into_right_body(),
+            ))
+        });
+    }
+
+    fn unauthorized(
+        &self,
+        request: HttpRequest,
+    ) -> LocalBoxFuture<'static, Result<ServiceResponse<EitherBody<B>>, Error>> {
+        let response = HttpResponse::Unauthorized()
+            .append_header((
+                header::WWW_AUTHENTICATE,
+                "Basic realm=\"ConfigServer\", charset=\"UTF-8\"",
+            ))
+            .finish();
+        return Box::pin(async {
+            Ok(ServiceResponse::new(
+                request,
+                response.map_into_right_body(),
+            ))
+        });
+    }
+}
+
 impl<S, B> Service<ServiceRequest> for ConfigServerMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
@@ -60,119 +111,93 @@ where
     dev::forward_ready!(service);
 
     fn call(&self, request: ServiceRequest) -> Self::Future {
-        // Change this to see the change in outcome in the browser.
-        // Usually this boolean would be acquired from a password check or other auth verification.
-        let is_logged_in = false;
+        let (request, _pl) = request.into_parts();
 
-        // Don't forward to `/login` if we are already on `/login`.
-        if !is_logged_in && request.path() != "/login" {
-            let (request, _pl) = request.into_parts();
+        let (login, password) = match is_request_authorized(&request) {
+            AuthenticationState::Unauthorized => return self.unauthorized(request),
+            AuthenticationState::Authorized { login, password } => (login, password),
+        };
 
-            if let Some(response) = ensure_authentication_basic(&request) {
-                return Box::pin(async {
-                    Ok(ServiceResponse::new(
-                        request,
-                        response.map_into_right_body(),
-                    ))
-                });
-            }
+        let (repo, path, branch) = match parse_query(request.path()) {
+            Query::Invalid => return self.not_found(request),
+            Query::Success {
+                repository,
+                path,
+                branch,
+            } => (repository, path, branch),
+        };
 
-            let path_elements: Vec<&str> = request.path().split('/').collect();
-            let repo_name = path_elements[1];
-            let repo_config = match self
-                .configuration
-                .repositories
-                .iter()
-                .find(|&x| x.name.eq_ignore_ascii_case(repo_name))
-            {
-                Some(c) => c,
-                None => {
-                    let response = HttpResponse::NotFound().finish();
-                    return Box::pin(async {
-                        Ok(ServiceResponse::new(
-                            request,
-                            response.map_into_right_body(),
-                        ))
-                    });
-                }
-            };
+        let repo_config = match self
+            .configuration
+            .repositories
+            .iter()
+            .find(|&x| x.name.eq_ignore_ascii_case(&repo))
+        {
+            Some(c) => c,
+            None => return self.not_found(request),
+        };
 
-            if !is_authorized(&request, &repo_config){
-                let response = HttpResponse::Unauthorized().finish();
-                    return Box::pin(async {
-                        Ok(ServiceResponse::new(
-                            request,
-                            response.map_into_right_body(),
-                        ))
-                    });
-            }
-            let _ = match_request(&request);
-            let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
-            return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
-
-            // let response = HttpResponse::Found()
-            //     .insert_header((http::header::LOCATION, "/login"))
-            //     .finish()
-            //     // constructed responses map to "right" body
-            //     .map_into_right_body();
+        if !is_authorized(&login, &password, &repo_config) {
+            return self.unauthorized(request);
         }
 
-        let res = self.service.call(request);
+        let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
+        return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
 
-        Box::pin(async move {
-            // forwarded responses map to "left" body
-            res.await.map(ServiceResponse::map_into_left_body)
-        })
+        // let res = self.service.call(request);
+
+        // Box::pin(async move {
+        //     // forwarded responses map to "left" body
+        //     res.await.map(ServiceResponse::map_into_left_body)
+        // })
     }
 }
 
-// fn select_repository(configuration: &Configuration, path:String)-> &Repo{
-
-// }
-
-/// Ensures the request bears BASIC-AUTH credentials. If not crafts a response requiring the user to log-in
-fn ensure_authentication_basic(request: &HttpRequest) -> Option<HttpResponse> {
+fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
     if !request.headers().contains_key(header::AUTHORIZATION) {
-        let response = HttpResponse::Unauthorized()
-            .append_header((
-                header::WWW_AUTHENTICATE,
-                "Basic realm=\"ConfigServer\", charset=\"UTF-8\"",
-            ))
-            .finish();
-        return Some(response);
+        return AuthenticationState::Unauthorized;
     }
-    None
+
+    let auth_header = request.headers().get(header::AUTHORIZATION).unwrap();
+    let mut auth_str = auth_header.to_str().unwrap();
+    auth_str = auth_str.strip_prefix("Basic ").unwrap();
+    let bytes = base64::decode(auth_str).unwrap();
+    let credentials = String::from_utf8(bytes).unwrap();
+    let login_pwd: Vec<&str> = credentials.split(":").collect();
+
+    AuthenticationState::Authorized {
+        login: login_pwd[0].to_owned(),
+        password: login_pwd[1].to_owned(),
+    }
 }
 
-fn match_request(request: &HttpRequest) -> (&str, &str) {
-    let p = request.path();
-    let q = request.query_string();
-    debug!("{:?}   {:?}", p, q);
-    let uri = request.uri();
-    let x = uri.path_and_query().unwrap();
-    debug!("{:?}", x);
-    ("", "")
-}
-
-fn is_authorized(request: &HttpRequest, config: &Repo) -> bool {
-    let auth = request.headers().get(header::AUTHORIZATION).unwrap();
-    debug!("{:?}", auth);
-    let authstr = auth.to_str().unwrap();
-    let b64 = authstr.strip_prefix("Basic ").unwrap();
-    let bytes = base64::decode(b64).unwrap();
-    let credsstr = String::from_utf8(bytes).unwrap();
-    let creds:Vec<&str> = credsstr.split(":").collect();
-
-    let users = match &config.credentials{
+fn is_authorized(login: &str, password: &str, config: &Repo) -> bool {
+    // No credentials configuration in the repository means free for all
+    let users = match &config.credentials {
         Some(c) => c,
         None => return true,
     };
 
-    let current = match users.iter().find(|&x| x.user_name.eq_ignore_ascii_case(creds[0])){
+    let grant = match users
+        .iter()
+        .find(|&x| x.user_name.eq_ignore_ascii_case(login))
+    {
         Some(c) => c,
         None => return false,
     };
 
+    grant.password == password
+}
 
-    current.password == creds[1]
+fn parse_query(request_path: &str) -> Query {
+    let path_elements: Vec<&str> = request_path.split('/').collect();
+    if path_elements.len() < 2 {
+        return Query::Invalid;
+    }
+
+    return Query::Success {
+        repository: path_elements[1].to_owned(),
+        path: " ".to_string(),
+        branch: " ".to_string(),
+    };
 }
