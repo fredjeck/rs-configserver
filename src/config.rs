@@ -80,3 +80,30 @@ pub fn resolve_path() -> Result<PathBuf, Box<dyn Error>> {
     }
     bail!(err)
 }
+
+impl Configuration {
+    pub fn repo_with_name(&self, name: &str) -> Option<&Repo> {
+        self.repositories
+            .iter()
+            .find(|&x| x.name.eq_ignore_ascii_case(name))
+    }
+}
+
+impl Repo {
+    pub fn is_acces_granted(&self, login: &str, password: &str) -> bool {
+        let users = match &self.credentials {
+            Some(c) => c,
+            None => return true,
+        };
+
+        let grant = match users
+            .iter()
+            .find(|&x| x.user_name.eq_ignore_ascii_case(login))
+        {
+            Some(c) => c,
+            None => return false,
+        };
+
+        grant.password == password
+    }
+}

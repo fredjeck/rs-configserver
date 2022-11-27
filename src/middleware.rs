@@ -127,17 +127,15 @@ where
             } => (repository, path, branch),
         };
 
-        let repo_config = match self
-            .configuration
-            .repositories
-            .iter()
-            .find(|&x| x.name.eq_ignore_ascii_case(&repo))
+        let repo_config = match self.configuration.repo_with_name((&repo))
         {
             Some(c) => c,
             None => return self.not_found(request),
         };
 
-        if !is_authorized(&login, &password, &repo_config) {
+        
+
+        if !repo_config.is_acces_granted(&login, &password) {
             return self.unauthorized(request);
         }
 
@@ -169,24 +167,6 @@ fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
         login: login_pwd[0].to_owned(),
         password: login_pwd[1].to_owned(),
     }
-}
-
-fn is_authorized(login: &str, password: &str, config: &Repo) -> bool {
-    // No credentials configuration in the repository means free for all
-    let users = match &config.credentials {
-        Some(c) => c,
-        None => return true,
-    };
-
-    let grant = match users
-        .iter()
-        .find(|&x| x.user_name.eq_ignore_ascii_case(login))
-    {
-        Some(c) => c,
-        None => return false,
-    };
-
-    grant.password == password
 }
 
 fn parse_query(request_path: &str) -> Query {
