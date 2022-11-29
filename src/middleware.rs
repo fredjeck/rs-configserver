@@ -118,7 +118,7 @@ where
             AuthenticationState::Authorized { login, password } => (login, password),
         };
 
-        let (repo, path, branch) = match parse_query(request.path(), request.query_string()) {
+        let (repo, path, branch) = match parse_query(request.path()) {
             Query::Invalid => return self.not_found(request),
             Query::Success {
                 repository,
@@ -133,7 +133,9 @@ where
             None => return self.not_found(request),
         };
 
-        if !is_authorized(&login, &password, &repo_config) {
+        
+
+        if !repo_config.is_acces_granted(&login, &password) {
             return self.unauthorized(request);
         }
 
@@ -167,25 +169,7 @@ fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
     }
 }
 
-fn is_authorized(login: &str, password: &str, config: &Repo) -> bool {
-    // No credentials configuration in the repository means free for all
-    let users = match &config.credentials {
-        Some(c) => c,
-        None => return true,
-    };
-
-    let grant = match users
-        .iter()
-        .find(|&x| x.user_name.eq_ignore_ascii_case(login))
-    {
-        Some(c) => c,
-        None => return false,
-    };
-
-    grant.password == password
-}
-
-fn parse_query(request_path: &str, query_string: &str) -> Query {
+fn parse_query(request_path: &str) -> Query {
     let path_elements: Vec<&str> = request_path.split('/').collect();
     if path_elements.len() < 2 {
         return Query::Invalid;
