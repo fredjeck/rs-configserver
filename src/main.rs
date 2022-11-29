@@ -4,11 +4,11 @@ use actix_web::{App, HttpServer};
 use tempfile::tempdir;
 use tracing::{info, Level};
 
-use crate::config::Configuration;
+use crate::configuration::Configuration;
 
-mod config;
+mod configuration;
 mod middleware;
-mod repo;
+mod repository;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -17,19 +17,19 @@ async fn main() -> std::io::Result<()> {
         .pretty()
         .init();
 
-    let path = config::resolve_path().unwrap();
+    let path = configuration::resolve_path().unwrap();
     let path_str = path.to_str().unwrap();
     info!(path = path_str, "Loading configuration from '{}'", path_str);
 
     let configuration: Configuration =
-        config::load(&path).expect(&format!("Cannot read configuration from {}", path_str));
+        configuration::load(&path).expect(&format!("Cannot read configuration from {}", path_str));
 
     let repositories = configuration.repositories.clone();
     let temp_dir = tempdir().unwrap().into_path();
 
     let mut handles: Vec<thread::JoinHandle<()>> = Vec::new();
     for repo in repositories {
-        handles.push(repo::watch(repo, temp_dir.clone()));
+        handles.push(repo.create_watcher(temp_dir.clone()));
     }
 
     let host = configuration.network.host.to_owned();

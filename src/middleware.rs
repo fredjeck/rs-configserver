@@ -8,7 +8,7 @@ use actix_web::{
 };
 use futures_util::future::LocalBoxFuture;
 
-use crate::config::{Configuration, Repo};
+use crate::{configuration::{Configuration}, repository::Repo};
 
 enum AuthenticationState {
     Unauthorized,
