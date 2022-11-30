@@ -11,6 +11,13 @@ use simple_error::bail;
 
 use crate::repository::Repo;
 
+/// Environment variable pointing to the configserver yaml configuration file
+static CONFIGSERVER_CFG: &str = "CONFIGSEVER_CFG";
+/// Environment variable pointing to the directory where the configserver yaml configuration is to be found
+static CONFIGSERVER_HOME: &str = "CONFIGSEVER_HOME";
+/// Default name of the configserver configuation file
+static CONFIGSERVER_YML: &str = "configserver.yml";
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Configuration {
     pub name: String,
@@ -24,14 +31,8 @@ pub struct Net {
     pub port: u16,
 }
 
-/// Environment variable pointing to the configserver yaml configuration file
-static CONFIGSERVER_CFG: &str = "CONFIGSEVER_CFG";
-/// Environment variable pointing to the directory where the configserver yaml configuration is to be found
-static CONFIGSERVER_HOME: &str = "CONFIGSEVER_HOME";
-/// Default name of the configserver configuation file
-static CONFIGSERVER_YML: &str = "configserver.yml";
-
 impl Configuration {
+    /// Finds a repository matching the provided name in the configuration
     pub fn repository(&self, name: &str) -> Option<&Repo> {
         self.repositories
             .iter()
@@ -76,24 +77,18 @@ pub fn resolve_path() -> Result<PathBuf, Box<dyn Error>> {
     bail!(err)
 }
 
-impl Configuration {
-    pub fn repo_with_name(&self, name: &str) -> Option<&Repo> {
-        self.repositories
-            .iter()
-            .find(|&x| x.name.eq_ignore_ascii_case(name))
-    }
-}
-
 impl Repo {
-    pub fn is_acces_granted(&self, login: &str, password: &str) -> bool {
+    /// Checks if the provided user and password can access this repository
+    /// TODO Improve with password encryption - as for now this is only for testing purposes
+    pub fn is_granted_for(&self, user: &str, password: &str) -> bool {
         let users = match &self.credentials {
             Some(c) => c,
-            None => return true,
+            None => return true, // No credentials means the repo can be accessed by anyone
         };
 
         let grant = match users
             .iter()
-            .find(|&x| x.user_name.eq_ignore_ascii_case(login))
+            .find(|&x| x.user_name.eq_ignore_ascii_case(user))
         {
             Some(c) => c,
             None => return false,

@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
     let host = configuration.network.host.to_owned();
     let port = configuration.network.port;
     let task = HttpServer::new(move || {
-        App::new().wrap(middleware::ConfigServer::new(configuration.clone()))
+        App::new().wrap(middleware::ConfigServer::new(configuration.clone(), temp_dir.clone()))
     })
     .bind((host, port))?
     .run()

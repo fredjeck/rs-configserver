@@ -1,4 +1,4 @@
-use std::future::{ready, Ready};
+use std::{future::{ready, Ready}, path::{PathBuf, Path}};
 
 use actix_web::{
     body::EitherBody,
@@ -7,8 +7,9 @@ use actix_web::{
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
+use tracing::{debug, error, info};
 
-use crate::{configuration::{Configuration}, repository::Repo};
+use crate::configuration::Configuration;
 
 enum AuthenticationState {
     Unauthorized,
@@ -26,12 +27,14 @@ enum Query {
 
 pub struct ConfigServer {
     configuration: Configuration,
+    repository_path: PathBuf
 }
 
 impl ConfigServer {
-    pub fn new(config: Configuration) -> Self {
+    pub fn new(config: Configuration, root: PathBuf) -> Self {
         ConfigServer {
             configuration: config,
+            repository_path: root
         }
     }
 }
@@ -52,12 +55,15 @@ where
         ready(Ok(ConfigServerMiddleware {
             service: service,
             configuration: self.configuration.clone(),
+            repository_path: self.repository_path.clone()
+
         }))
     }
 }
 pub struct ConfigServerMiddleware<S> {
     service: S,
     configuration: Configuration,
+    repository_path: PathBuf
 }
 
 impl<S, B> ConfigServerMiddleware<S>
@@ -118,7 +124,7 @@ where
             AuthenticationState::Authorized { login, password } => (login, password),
         };
 
-        let (repo, path, branch) = match parse_query(request.path()) {
+        let (repo, path, _branch) = match parse_query(request.path()) {
             Query::Invalid => return self.not_found(request),
             Query::Success {
                 repository,
@@ -131,13 +137,15 @@ where
         {
             Some(c) => c,
             None => return self.not_found(request),
-        };
+        };       
 
-        
-
-        if !repo_config.is_acces_granted(&login, &password) {
+        if !repo_config.is_granted_for(&login, &password) {
             return self.unauthorized(request);
         }
+
+        let mut p = Path::new(&self.repository_path).join(repo).join(path);
+        info!("{:?}", p);
+        
 
         let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
         return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
@@ -151,6 +159,7 @@ where
     }
 }
 
+/// Ensures the provided request bears a basic Authorization scheme
 fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
     if !request.headers().contains_key(header::AUTHORIZATION) {
         return AuthenticationState::Unauthorized;
@@ -158,6 +167,11 @@ fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
 
     let auth_header = request.headers().get(header::AUTHORIZATION).unwrap();
     let mut auth_str = auth_header.to_str().unwrap();
+    if !auth_str.starts_with("Basic "){
+        // We only support Basic auth
+        return AuthenticationState::Unauthorized
+    }
+
     auth_str = auth_str.strip_prefix("Basic ").unwrap();
     let bytes = base64::decode(auth_str).unwrap();
     let credentials = String::from_utf8(bytes).unwrap();
@@ -169,6 +183,7 @@ fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
     }
 }
 
+/// Morphs the inbound path to a repositozy, path and optional branch
 fn parse_query(request_path: &str) -> Query {
     let path_elements: Vec<&str> = request_path.split('/').collect();
     if path_elements.len() < 2 {
@@ -177,7 +192,7 @@ fn parse_query(request_path: &str) -> Query {
 
     return Query::Success {
         repository: path_elements[1].to_owned(),
-        path: " ".to_string(),
+        path: path_elements[2].to_owned(),
         branch: " ".to_string(),
     };
 }
