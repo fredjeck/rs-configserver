@@ -1,6 +1,6 @@
 use std::thread;
 
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, HttpResponse, web, HttpRequest};
 use tempfile::tempdir;
 use tracing::{info, Level};
 
@@ -36,6 +36,7 @@ async fn main() -> std::io::Result<()> {
     let port = configuration.network.port;
     let task = HttpServer::new(move || {
         App::new().wrap(middleware::ConfigServer::new(configuration.clone(), temp_dir.clone()))
+        .route("/encrypt", web::get().to(encrypt))
     })
     .bind((host, port))?
     .run()
@@ -45,4 +46,9 @@ async fn main() -> std::io::Result<()> {
         thread.join().unwrap();
     }
     task
+}
+
+
+async fn encrypt(req:HttpRequest) -> HttpResponse{
+    HttpResponse::Ok().body("Test")
 }

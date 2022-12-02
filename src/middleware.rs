@@ -1,4 +1,4 @@
-use std::{future::{ready, Ready}, path::{PathBuf, Path}};
+use std::{future::{ready, Ready}, path::{PathBuf, Path}, fs};
 
 use actix_web::{
     body::EitherBody,
@@ -143,11 +143,13 @@ where
             return self.unauthorized(request);
         }
 
-        let mut p = Path::new(&self.repository_path).join(repo).join(path);
+        let p = Path::new(&self.repository_path).join(repo).join(path);
         info!("{:?}", p);
+
+        let content = fs::read_to_string(p).unwrap();
         
 
-        let response = HttpResponse::Ok().body("Hey there!").map_into_right_body();
+        let response = HttpResponse::Ok().body(content).map_into_right_body();
         return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
 
         // let res = self.service.call(request);
