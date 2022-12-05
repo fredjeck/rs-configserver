@@ -21,6 +21,7 @@ static CONFIGSERVER_YML: &str = "configserver.yml";
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Configuration {
     pub name: String,
+    pub encryptionKey: String,
     pub network: Net,
     pub repositories: Vec<Repo>,
 }

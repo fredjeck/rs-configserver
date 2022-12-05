@@ -1,10 +1,14 @@
-use std::thread;
+use std::{thread, str::FromStr, sync::Mutex};
 
-use actix_web::{App, HttpServer, HttpResponse, web, HttpRequest};
+use actix_web::{App, HttpServer, web::{self}, post};
+use futures_util::StreamExt;
+
 use tempfile::tempdir;
 use tracing::{info, Level};
 
 use crate::configuration::Configuration;
+
+use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 
 mod configuration;
 mod middleware;
@@ -24,6 +28,10 @@ async fn main() -> std::io::Result<()> {
     let configuration: Configuration =
         configuration::load(&path).expect(&format!("Cannot read configuration from {}", path_str));
 
+    
+
+    
+
     let repositories = configuration.repositories.clone();
     let temp_dir = tempdir().unwrap().into_path();
 
@@ -32,11 +40,13 @@ async fn main() -> std::io::Result<()> {
         handles.push(repo.create_watcher(temp_dir.clone()));
     }
 
+    let data = web::Data::new(configuration.clone());
     let host = configuration.network.host.to_owned();
     let port = configuration.network.port;
     let task = HttpServer::new(move || {
         App::new().wrap(middleware::ConfigServer::new(configuration.clone(), temp_dir.clone()))
-        .route("/encrypt", web::get().to(encrypt))
+        .service(encrypt)
+        .app_data(data.clone())
     })
     .bind((host, port))?
     .run()
@@ -48,7 +58,22 @@ async fn main() -> std::io::Result<()> {
     task
 }
 
+#[post("/encrypt")]
+async fn encrypt(mut body: web::Payload, data: web::Data<Configuration>) -> actix_web::Result<String> {
 
-async fn encrypt(req:HttpRequest) -> HttpResponse{
-    HttpResponse::Ok().body("Test")
+    let mut bytes = web::BytesMut::new();
+    while let Some(item) = body.next().await {
+        bytes.extend_from_slice(&item?);
+    }
+
+    let body = match String::from_utf8(bytes.to_vec()) {
+        Ok(text) => text,
+        Err(_) => String::from_str("").unwrap()
+    };
+
+    let mc = new_magic_crypt!(&data.encryptionKey, 256);
+    let base64 = mc.encrypt_str_to_base64(body);
+    
+
+    Ok(base64)
 }

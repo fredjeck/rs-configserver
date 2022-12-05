@@ -1,4 +1,5 @@
 name: "Test Config Server"
+encryptionKey: "vpvY35wo3LFl@76bXqgz3HOb13TN&oE8jqvMbkXMD#q4cv0hvQ"
 network:
   host: 127.0.0.1
   port: 8080

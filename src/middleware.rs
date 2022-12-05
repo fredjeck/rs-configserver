@@ -116,8 +116,18 @@ where
 
     dev::forward_ready!(service);
 
-    fn call(&self, request: ServiceRequest) -> Self::Future {
-        let (request, _pl) = request.into_parts();
+    fn call(&self, rq: ServiceRequest) -> Self::Future {
+        if(rq.path().starts_with("/encrypt")){
+            let res = self.service.call(rq);
+
+            return Box::pin(async move {
+                // forwarded responses map to "left" body
+                res.await.map(ServiceResponse::map_into_left_body)
+            });
+        }
+        
+
+        let (request, _pl) = rq.into_parts();
 
         let (login, password) = match is_request_authorized(&request) {
             AuthenticationState::Unauthorized => return self.unauthorized(request),
@@ -151,13 +161,6 @@ where
 
         let response = HttpResponse::Ok().body(content).map_into_right_body();
         return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
-
-        // let res = self.service.call(request);
-
-        // Box::pin(async move {
-        //     // forwarded responses map to "left" body
-        //     res.await.map(ServiceResponse::map_into_left_body)
-        // })
     }
 }
 
