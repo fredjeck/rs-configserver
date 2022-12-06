@@ -1,18 +1,16 @@
-use std::{thread, str::FromStr, sync::Mutex};
+use std::{thread};
 
-use actix_web::{App, HttpServer, web::{self}, post};
-use futures_util::StreamExt;
+use actix_web::{App, HttpServer, web::{self, post, Bytes}, HttpResponse};
 
 use tempfile::tempdir;
 use tracing::{info, Level};
 
 use crate::configuration::Configuration;
 
-use magic_crypt::{new_magic_crypt, MagicCryptTrait};
-
 mod configuration;
 mod middleware;
 mod repository;
+mod crypt;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -45,7 +43,7 @@ async fn main() -> std::io::Result<()> {
     let port = configuration.network.port;
     let task = HttpServer::new(move || {
         App::new().wrap(middleware::ConfigServer::new(configuration.clone(), temp_dir.clone()))
-        .service(encrypt)
+        .route("/encrypt", post().to(encryption_handler))
         .app_data(data.clone())
     })
     .bind((host, port))?
@@ -58,22 +56,12 @@ async fn main() -> std::io::Result<()> {
     task
 }
 
-#[post("/encrypt")]
-async fn encrypt(mut body: web::Payload, data: web::Data<Configuration>) -> actix_web::Result<String> {
 
-    let mut bytes = web::BytesMut::new();
-    while let Some(item) = body.next().await {
-        bytes.extend_from_slice(&item?);
-    }
 
+async fn encryption_handler(bytes: Bytes, data: web::Data<Configuration>) -> HttpResponse {
     let body = match String::from_utf8(bytes.to_vec()) {
         Ok(text) => text,
-        Err(_) => String::from_str("").unwrap()
+        Err(_) => return HttpResponse::BadRequest().finish()
     };
-
-    let mc = new_magic_crypt!(&data.encryptionKey, 256);
-    let base64 = mc.encrypt_str_to_base64(body);
-    
-
-    Ok(base64)
+    HttpResponse::Ok().body(crypt::encrypt_str(&data.encryption_key, &body))
 }

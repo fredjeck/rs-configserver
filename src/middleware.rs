@@ -7,7 +7,7 @@ use actix_web::{
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
-use tracing::{debug, error, info};
+use tracing::{info};
 
 use crate::configuration::Configuration;
 
@@ -117,7 +117,7 @@ where
     dev::forward_ready!(service);
 
     fn call(&self, rq: ServiceRequest) -> Self::Future {
-        if(rq.path().starts_with("/encrypt")){
+        if rq.path().starts_with("/encrypt") {
             let res = self.service.call(rq);
 
             return Box::pin(async move {
@@ -153,10 +153,7 @@ where
             return self.unauthorized(request);
         }
 
-        let p = Path::new(&self.repository_path).join(repo).join(path);
-        info!("{:?}", p);
-
-        let content = fs::read_to_string(p).unwrap();
+        let content = load_content(self.repository_path.to_str().unwrap(), &repo, &path);
         
 
         let response = HttpResponse::Ok().body(content).map_into_right_body();
@@ -200,4 +197,13 @@ fn parse_query(request_path: &str) -> Query {
         path: path_elements[2].to_owned(),
         branch: " ".to_string(),
     };
+}
+
+fn load_content(repository_path: &str, repository: &str, file_path : &str) ->String{
+    let p = Path::new(repository_path).join(repository).join(file_path);
+    info!("{:?}", p);
+
+    let content = fs::read_to_string(p).unwrap();
+
+    content
 }
