@@ -1,8 +1,8 @@
 use std::{thread};
 
-use actix_web::{App, HttpServer, web::{self, post, Bytes}, HttpResponse};
+use actix_web::{App, HttpServer, web::{self, post}};
 
-use crypto::encrypt_str;
+use handlers::encrypt_body_content;
 use tempfile::tempdir;
 use tracing::{info, Level};
 
@@ -12,6 +12,7 @@ mod configuration;
 mod middleware;
 mod repository;
 mod crypto;
+mod handlers;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -26,11 +27,7 @@ async fn main() -> std::io::Result<()> {
 
     let configuration: Configuration =
         configuration::load(&path).expect(&format!("Cannot read configuration from {}", path_str));
-
-    
-
-    
-
+        
     let repositories = configuration.repositories.clone();
     let temp_dir = tempdir().unwrap().into_path();
 
@@ -44,7 +41,7 @@ async fn main() -> std::io::Result<()> {
     let port = configuration.network.port;
     let task = HttpServer::new(move || {
         App::new().wrap(middleware::ConfigServer::new(configuration.clone(), temp_dir.clone()))
-        .route("/encrypt", post().to(encryption_handler))
+        .route("/encrypt", post().to(encrypt_body_content))
         .app_data(data.clone())
     })
     .bind((host, port))?
@@ -55,14 +52,4 @@ async fn main() -> std::io::Result<()> {
         thread.join().unwrap();
     }
     task
-}
-
-
-
-async fn encryption_handler(bytes: Bytes, data: web::Data<Configuration>) -> HttpResponse {
-    let body = match String::from_utf8(bytes.to_vec()) {
-        Ok(text) => text,
-        Err(_) => return HttpResponse::BadRequest().finish()
-    };
-    HttpResponse::Ok().body(encrypt_str(&data.encryption_key, &body))
 }

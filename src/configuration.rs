@@ -9,7 +9,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use simple_error::bail;
 
-use crate::repository::Repo;
+use crate::repository::GitRepository;
 
 /// Environment variable pointing to the configserver yaml configuration file
 static CONFIGSERVER_CFG: &str = "CONFIGSEVER_CFG";
@@ -20,21 +20,27 @@ static CONFIGSERVER_YML: &str = "configserver.yml";
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Configuration {
+    /// Name of the configserver insatnce
     pub name: String,
+    /// Key used to encrypt sensitive data
     pub encryption_key: String,
+    /// Network configuration
     pub network: Net,
-    pub repositories: Vec<Repo>,
+    /// List of git repositories to serve
+    pub repositories: Vec<GitRepository>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Net {
+    /// Host on which the configserver will listen for incoming requests
     pub host: String,
+    /// Port on which the configserver will listen for incoming requests
     pub port: u16,
 }
 
 impl Configuration {
     /// Finds a repository matching the provided name in the configuration
-    pub fn repository(&self, name: &str) -> Option<&Repo> {
+    pub fn repository(&self, name: &str) -> Option<&GitRepository> {
         self.repositories
             .iter()
             .find(|&x| x.name.eq_ignore_ascii_case(name))
@@ -78,7 +84,7 @@ pub fn resolve_path() -> Result<PathBuf, Box<dyn Error>> {
     bail!(err)
 }
 
-impl Repo {
+impl GitRepository {
     /// Checks if the provided user and password can access this repository
     /// TODO Improve with password encryption - as for now this is only for testing purposes
     pub fn is_granted_for(&self, user: &str, password: &str) -> bool {

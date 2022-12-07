@@ -1,4 +1,4 @@
-use std::{future::{ready, Ready}, path::{PathBuf, Path}, fs};
+use std::{future::{ready, Ready}, path::{PathBuf}};
 
 use actix_web::{
     body::EitherBody,
@@ -7,10 +7,8 @@ use actix_web::{
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
-use regex::Regex;
-use tracing::{info};
 
-use crate::{configuration::Configuration, crypto};
+use crate::{configuration::Configuration, repository};
 
 enum AuthenticationState {
     Unauthorized,
@@ -154,7 +152,7 @@ where
             return self.unauthorized(request);
         }
 
-        let response = match load_content(self.repository_path.to_str().unwrap(), &repo, &path, &self.configuration.encryption_key){
+        let response = match repository::load_file(self.repository_path.to_str().unwrap(), &repo, &path, &self.configuration.encryption_key){
             Some(content) => HttpResponse::Ok().body(content).map_into_right_body(),
             None => HttpResponse::NotFound().finish().map_into_right_body()
         };
@@ -189,35 +187,14 @@ fn is_request_authorized(request: &HttpRequest) -> AuthenticationState {
 
 /// Morphs the inbound path to a repositozy, path and optional branch
 fn parse_query(request_path: &str) -> Query {
-    let path_elements: Vec<&str> = request_path.split('/').collect();
+    let path_elements: Vec<&str> = request_path.split('/').filter(|&x| !x.is_empty()).collect();
     if path_elements.len() < 2 {
         return Query::Invalid;
     }
 
     return Query::Success {
-        repository: path_elements[1].to_owned(),
-        path: path_elements[2].to_owned(),
+        repository: path_elements[0].to_owned(),
+        path: path_elements[1].to_owned(),
         branch: " ".to_string(),
     };
-}
-
-fn load_content(repository_path: &str, repository: &str, file_path : &str, key: &str) ->Option<String>{
-    let p = Path::new(repository_path).join(repository).join(file_path);
-    info!("{:?}", p);
-
-    let mut content = match fs::read_to_string(p) {
-        Ok(txt) => txt,
-        Err(_) => return None,
-    };
-
-    let re = Regex::new(r"(\{enc:.*?\})").unwrap();
-
-    for cap in re.captures_iter(&content.clone()) {
-        let enc = &cap[1][5..&cap[1].len()-1];
-        let dec = crypto::decrypt_sr(key, enc).unwrap();
-        println!("value {:?} {} {}", &cap[1], enc, dec);
-        content = content.replace(&cap[1], &dec);
-    }
-
-    Some(content)
 }
