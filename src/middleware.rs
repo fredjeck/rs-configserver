@@ -7,9 +7,10 @@ use actix_web::{
     Error, HttpRequest, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
+use regex::Regex;
 use tracing::{info};
 
-use crate::configuration::Configuration;
+use crate::{configuration::Configuration, crypto};
 
 enum AuthenticationState {
     Unauthorized,
@@ -153,10 +154,11 @@ where
             return self.unauthorized(request);
         }
 
-        let content = load_content(self.repository_path.to_str().unwrap(), &repo, &path);
+        let response = match load_content(self.repository_path.to_str().unwrap(), &repo, &path, &self.configuration.encryption_key){
+            Some(content) => HttpResponse::Ok().body(content).map_into_right_body(),
+            None => HttpResponse::NotFound().finish().map_into_right_body()
+        };
         
-
-        let response = HttpResponse::Ok().body(content).map_into_right_body();
         return Box::pin(async { Ok(ServiceResponse::new(request, response)) });
     }
 }
@@ -199,11 +201,23 @@ fn parse_query(request_path: &str) -> Query {
     };
 }
 
-fn load_content(repository_path: &str, repository: &str, file_path : &str) ->String{
+fn load_content(repository_path: &str, repository: &str, file_path : &str, key: &str) ->Option<String>{
     let p = Path::new(repository_path).join(repository).join(file_path);
     info!("{:?}", p);
 
-    let content = fs::read_to_string(p).unwrap();
+    let mut content = match fs::read_to_string(p) {
+        Ok(txt) => txt,
+        Err(_) => return None,
+    };
 
-    content
+    let re = Regex::new(r"(\{enc:.*?\})").unwrap();
+
+    for cap in re.captures_iter(&content.clone()) {
+        let enc = &cap[1][5..&cap[1].len()-1];
+        let dec = crypto::decrypt_sr(key, enc).unwrap();
+        println!("value {:?} {} {}", &cap[1], enc, dec);
+        content = content.replace(&cap[1], &dec);
+    }
+
+    Some(content)
 }

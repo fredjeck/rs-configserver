@@ -2,6 +2,7 @@ use std::{thread};
 
 use actix_web::{App, HttpServer, web::{self, post, Bytes}, HttpResponse};
 
+use crypto::encrypt_str;
 use tempfile::tempdir;
 use tracing::{info, Level};
 
@@ -10,7 +11,7 @@ use crate::configuration::Configuration;
 mod configuration;
 mod middleware;
 mod repository;
-mod crypt;
+mod crypto;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -63,5 +64,5 @@ async fn encryption_handler(bytes: Bytes, data: web::Data<Configuration>) -> Htt
         Ok(text) => text,
         Err(_) => return HttpResponse::BadRequest().finish()
     };
-    HttpResponse::Ok().body(crypt::encrypt_str(&data.encryption_key, &body))
+    HttpResponse::Ok().body(encrypt_str(&data.encryption_key, &body))
 }
