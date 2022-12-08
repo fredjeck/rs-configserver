@@ -1,2 +1,0 @@
-GET http://localhost:8080/fswatcher/fswatcher.go
-Authorization: Basic YWRtaW46YWRtaW4=
