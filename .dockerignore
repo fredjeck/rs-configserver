@@ -1,0 +1,5 @@
+target/
+README.md
+LICENCE
+configserver.yml
+.gitignore
