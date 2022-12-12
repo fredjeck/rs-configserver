@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  configserver:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configserver.yml:/opt/config/configserver.yml
+    environment:
+      - CONFIGSERVER_CFG=/opt/config/configserver.yml

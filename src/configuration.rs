@@ -12,11 +12,11 @@ use simple_error::bail;
 use crate::repository::GitRepository;
 
 /// Environment variable pointing to the configserver yaml configuration file
-static CONFIGSERVER_CFG: &str = "CONFIGSEVER_CFG";
+const CONFIGSERVER_CFG: &str = "CONFIGSERVER_CFG";
 /// Environment variable pointing to the directory where the configserver yaml configuration is to be found
-static CONFIGSERVER_HOME: &str = "CONFIGSEVER_HOME";
+const CONFIGSERVER_HOME: &str = "CONFIGSERVER_HOME";
 /// Default name of the configserver configuation file
-static CONFIGSERVER_YML: &str = "configserver.yml";
+const CONFIGSERVER_YML: &str = "configserver.yml";
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Configuration {

@@ -20,7 +20,10 @@
                 }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "CONFIGSERVER_HOME":"/home/fred/Workspaces/configserver"
+            }
         },
         {
             "type": "lldb",
